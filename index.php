@@ -44,15 +44,42 @@ if (!isset($_SESSION['pins'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
     
+    if ($input === null) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Invalid JSON']);
+        exit;
+    }
+    
     if (isset($input['action'])) {
         if ($input['action'] === 'add_pin') {
+            // Validate required fields
+            if (!isset($input['name']) || !isset($input['x']) || !isset($input['y']) || 
+                !isset($input['note']) || !isset($input['height'])) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Missing required fields']);
+                exit;
+            }
+            
+            // Validate and sanitize data
+            $name = htmlspecialchars(trim($input['name']), ENT_QUOTES, 'UTF-8');
+            $x = filter_var($input['x'], FILTER_VALIDATE_INT);
+            $y = filter_var($input['y'], FILTER_VALIDATE_INT);
+            $note = htmlspecialchars(trim($input['note']), ENT_QUOTES, 'UTF-8');
+            $height = filter_var($input['height'], FILTER_VALIDATE_INT);
+            
+            if ($x === false || $y === false || $height === false || empty($name) || empty($note)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Invalid data types or empty fields']);
+                exit;
+            }
+            
             $pin = [
                 'id' => uniqid(),
-                'name' => $input['name'],
-                'x' => $input['x'],
-                'y' => $input['y'],
-                'note' => $input['note'],
-                'height' => $input['height']
+                'name' => $name,
+                'x' => $x,
+                'y' => $y,
+                'note' => $note,
+                'height' => $height
             ];
             $_SESSION['pins'][] = $pin;
             echo json_encode(['success' => true, 'pin' => $pin]);
@@ -382,6 +409,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         let selectedPins = [];
         let addPinMode = false;
         
+        // Utility function to escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
         const mapContainer = document.getElementById('map-container');
         const canvas = document.getElementById('map-canvas');
         const ctx = canvas.getContext('2d');
@@ -419,7 +453,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             content.innerHTML = `
                 <div class="info-item">
                     <label>Name:</label>
-                    <p>${pin.name}</p>
+                    <p>${escapeHtml(pin.name)}</p>
                 </div>
                 <div class="info-item">
                     <label>Location:</label>
@@ -431,7 +465,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div class="info-item">
                     <label>Note:</label>
-                    <p>${pin.note}</p>
+                    <p>${escapeHtml(pin.note)}</p>
                 </div>
             `;
             document.getElementById('pin-info-modal').style.display = 'block';
@@ -623,7 +657,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 const item = document.createElement('div');
                 item.className = 'selected-pin-item';
                 item.innerHTML = `
-                    <strong>${pin.name}</strong>
+                    <strong>${escapeHtml(pin.name)}</strong>
                     <small>Height: ${pin.height}m | Location: (${pin.x}, ${pin.y})</small>
                 `;
                 item.addEventListener('click', () => showPinInfo(pin));
