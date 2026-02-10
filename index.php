@@ -30,7 +30,7 @@ if (!isset($_SESSION['pins'])) {
     
     for ($i = 0; $i < 15; $i++) {
         $_SESSION['pins'][] = [
-            'id' => uniqid(),
+            'id' => bin2hex(random_bytes(16)),
             'name' => $names[$i],
             'x' => rand(50, 750),
             'y' => rand(50, 550),
@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             $pin = [
-                'id' => uniqid(),
+                'id' => bin2hex(random_bytes(16)),
                 'name' => $name,
                 'x' => $x,
                 'y' => $y,
@@ -509,18 +509,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 y: parseInt(document.getElementById('pin-y').value)
             };
             
-            const response = await fetch('index.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newPin)
-            });
-            
-            const data = await response.json();
-            if (data.success) {
-                pins.push(data.pin);
-                renderPins();
-                closeAddPin();
-                document.getElementById('add-pin-form').reset();
+            try {
+                const response = await fetch('index.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newPin)
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Server returned an error: ' + response.status);
+                }
+                
+                const data = await response.json();
+                if (data.success) {
+                    pins.push(data.pin);
+                    renderPins();
+                    closeAddPin();
+                    document.getElementById('add-pin-form').reset();
+                } else {
+                    alert('Error adding pin: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error adding pin:', error);
+                alert('Failed to add pin. Please try again.');
             }
         });
         
@@ -600,6 +611,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('selected-pins-list').style.display = 'none';
         }
         
+        // Clears only the lasso drawing path without clearing selection state
+        // This is used after completing a lasso selection to remove the drawn path
+        // while keeping the selected pins highlighted
         function clearLassoPath() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             lassoPoints = [];
